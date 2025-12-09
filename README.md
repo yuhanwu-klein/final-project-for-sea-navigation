@@ -9,8 +9,9 @@ An immersive, photorealistic 3D underwater environment with free navigation wher
 - **Ocean Floor**: Procedurally generated sandy terrain with multi-octave noise for natural variation
 - **Caustics Effects**: Animated light caustics projected on the ocean floor
 - **Volumetric God Rays**: Beautiful light shafts piercing through the water
-- **Depth-Based Fog**: Visibility decreases naturally with depth
-- **Post-Processing**: Bloom effects, underwater color grading, subtle chromatic aberration
+- **Light Blue Environment**: Bright, tropical ocean atmosphere with enhanced visibility
+- **Depth-Based Fog**: Gentle fog that increases naturally with depth
+- **Post-Processing**: Bloom effects, light blue color grading, subtle chromatic aberration
 
 ### 🐠 Pixel Art Marine Life
 - **75 Voxel-Style Fish**: Charming blocky fish constructed from cubes
@@ -203,12 +204,12 @@ The scene uses Three.js loaded via CDN, so an internet connection is required fo
 The scene dynamically adapts when you cross the water surface (y = 0):
 
 ### Underwater (y < 0)
-- Dark blue-tinted color grading
-- Dense exponential fog (increases with depth)
+- Light blue-tinted color grading (bright tropical ocean)
+- Gentle exponential fog (increases with depth)
 - Visible god rays and caustics
 - Multiple underwater point lights
-- Chromatic aberration
-- Reduced bloom intensity
+- Subtle chromatic aberration
+- Enhanced visibility with reduced fog density
 - Light level indicator shows depth attenuation
 
 ### Above Water (y > 0)
