@@ -259,13 +259,13 @@
                 void main() {
                     vec4 color = texture2D(tDiffuse, vUv);
 
-                    // Underwater color tint
-                    vec3 underwaterTint = vec3(0.0, 0.4, 0.6);
-                    color.rgb = mix(color.rgb, color.rgb * (1.0 + underwaterTint), underwater * 0.5);
+                    // Underwater color tint (light blue)
+                    vec3 underwaterTint = vec3(0.4, 0.7, 0.9);
+                    color.rgb = mix(color.rgb, color.rgb * (1.0 + underwaterTint * 0.3), underwater * 0.4);
 
                     // Add depth-based color shift
                     float depthEffect = clamp(depthFactor, 0.0, 1.0);
-                    color.rgb = mix(color.rgb, underwaterTint, depthEffect * underwater * 0.3);
+                    color.rgb = mix(color.rgb, underwaterTint, depthEffect * underwater * 0.2);
 
                     // Slight chromatic aberration for underwater feel
                     if (underwater > 0.5) {
@@ -410,7 +410,7 @@
         scene.add(camera);
 
         // Enhanced Lighting System
-        const ambientLight = new THREE.AmbientLight(0x406080, 0.3);
+        const ambientLight = new THREE.AmbientLight(0x80b3cc, 0.5);
         scene.add(ambientLight);
 
         const sunLight = new THREE.DirectionalLight(0xfff4e6, 2.5);
@@ -1116,8 +1116,8 @@
             scene.add(rock);
         }
 
-        // Fog
-        scene.fog = new THREE.FogExp2(0x001a33, 0.012);
+        // Fog (light blue for underwater)
+        scene.fog = new THREE.FogExp2(0x5eb3d6, 0.008);
 
         // Event listeners
         document.getElementById('startBtn').addEventListener('click', () => {
@@ -1519,9 +1519,9 @@
                 const depthRatio = Math.abs(camera.position.y) / 50;
 
                 if (isUnderwater) {
-                    scene.fog.color.setHex(0x001a33);
-                    scene.fog.density = 0.012 + depthRatio * 0.008;
-                    scene.background = new THREE.Color(0x001a33);
+                    scene.fog.color.setHex(0x5eb3d6);
+                    scene.fog.density = 0.008 + depthRatio * 0.005;
+                    scene.background = new THREE.Color(0x6ec4e0);
                     document.getElementById('environment').textContent = 'Underwater';
                     underwaterPass.uniforms.underwater.value = 1.0;
                     underwaterPass.uniforms.depthFactor.value = depthRatio;
