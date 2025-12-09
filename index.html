@@ -165,7 +165,8 @@
         <p><strong>SHIFT</strong> - Swim down</p>
         <p><strong>MOUSE</strong> - Look around</p>
         <p><strong>ESC</strong> - Release mouse</p>
-        <p style="margin-top: 15px; color: #ffeb3b;"><strong>🎥 GESTURE CONTROLS:</strong></p>
+        <p style="margin-top: 15px; color: #ffeb3b;"><strong>🎥 CAMERA CONTROLS:</strong></p>
+        <p><strong>🤸 Head Movement</strong> - Look around naturally</p>
         <p><strong>✋ Hand Up</strong> - Swim forward to catch fish</p>
         <p><strong>👍 Thumbs Up</strong> - Rise above the sea</p>
         <button id="startBtn">Click to Start</button>
@@ -189,8 +190,9 @@
         <canvas id="cameraCanvas"></canvas>
     </div>
 
-    <!-- MediaPipe Hands for Gesture Recognition -->
+    <!-- MediaPipe for Gesture Recognition and Head Tracking -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 
@@ -303,6 +305,17 @@
         let currentGesture = 'none';
         let handUpDetected = false;
         let thumbsUpDetected = false;
+
+        // Head tracking variables
+        let headTrackingActive = false;
+        let headYaw = 0;
+        let headPitch = 0;
+        let targetCameraRotationX = 0;
+        let targetCameraRotationY = 0;
+        let currentCameraRotationX = 0;
+        let currentCameraRotationY = 0;
+        const headTrackingSensitivity = 2.0;
+        const headTrackingSmoothing = 0.1;
 
         // Water surface level
         const waterLevel = 0;
@@ -1159,7 +1172,9 @@
         const toggleCameraBtn = document.getElementById('toggleCamera');
 
         let handsModel = null;
+        let faceMeshModel = null;
         let cameraInstance = null;
+        let videoStream = null;
 
         // Initialize MediaPipe Hands
         function initializeGestureRecognition() {
@@ -1177,6 +1192,24 @@
             });
 
             handsModel.onResults(onHandsResults);
+        }
+
+        // Initialize MediaPipe Face Mesh for head tracking
+        function initializeHeadTracking() {
+            faceMeshModel = new FaceMesh({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                }
+            });
+
+            faceMeshModel.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            faceMeshModel.onResults(onFaceResults);
         }
 
         // Gesture recognition logic
@@ -1223,6 +1256,48 @@
             canvasCtx.restore();
         }
 
+        // Head tracking results handler
+        function onFaceResults(results) {
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+
+                // Key facial landmarks for head pose estimation
+                const noseTip = landmarks[1];       // Nose tip
+                const chinBottom = landmarks[152];  // Chin bottom
+                const leftEye = landmarks[33];      // Left eye outer corner
+                const rightEye = landmarks[263];    // Right eye outer corner
+                const leftEar = landmarks[234];     // Left ear
+                const rightEar = landmarks[454];    // Right ear
+
+                // Calculate head yaw (left-right rotation)
+                // Compare horizontal positions of ears/eyes
+                const faceWidth = Math.abs(leftEye.x - rightEye.x);
+                const earDistance = Math.abs(leftEar.x - rightEar.x);
+                const centerX = (leftEye.x + rightEye.x) / 2;
+                const noseOffset = noseTip.x - centerX;
+
+                // Yaw angle based on nose position relative to eye center
+                headYaw = (noseOffset / faceWidth) * headTrackingSensitivity;
+
+                // Calculate head pitch (up-down rotation)
+                // Compare vertical positions
+                const faceHeight = Math.abs(noseTip.y - chinBottom.y);
+                const eyeY = (leftEye.y + rightEye.y) / 2;
+                const noseYOffset = noseTip.y - eyeY;
+
+                // Pitch angle based on nose vertical position
+                headPitch = (noseYOffset / faceHeight) * headTrackingSensitivity;
+
+                // Update target camera rotations
+                targetCameraRotationY = headYaw * Math.PI / 2; // Convert to radians
+                targetCameraRotationX = -headPitch * Math.PI / 4;
+
+                headTrackingActive = true;
+            } else {
+                headTrackingActive = false;
+            }
+        }
+
         // Gesture detection algorithm
         function detectGesture(landmarks) {
             // Landmark indices
@@ -1267,12 +1342,16 @@
 
         // Toggle camera and gesture control
         let cameraEnabled = false;
+        let frameCount = 0;
         toggleCameraBtn.addEventListener('click', async () => {
             if (!cameraEnabled) {
                 try {
-                    // Initialize MediaPipe
+                    // Initialize MediaPipe models
                     if (!handsModel) {
                         initializeGestureRecognition();
+                    }
+                    if (!faceMeshModel) {
+                        initializeHeadTracking();
                     }
 
                     // Start camera
@@ -1285,15 +1364,23 @@
                     });
 
                     videoElement.srcObject = stream;
+                    videoStream = stream;
 
                     // Set canvas dimensions
                     canvasElement.width = 320;
                     canvasElement.height = 240;
 
-                    // Start processing
+                    // Start processing - alternate between hands and face for performance
                     cameraInstance = new Camera(videoElement, {
                         onFrame: async () => {
+                            frameCount++;
+                            // Process hands every frame for responsive gestures
                             await handsModel.send({image: videoElement});
+
+                            // Process face every 2nd frame for performance
+                            if (frameCount % 2 === 0) {
+                                await faceMeshModel.send({image: videoElement});
+                            }
                         },
                         width: 640,
                         height: 480
@@ -1305,6 +1392,13 @@
                     toggleCameraBtn.textContent = 'Disable Gesture Control';
                     cameraEnabled = true;
                     gestureActive = true;
+
+                    // Update status to show head tracking is active
+                    setTimeout(() => {
+                        if (gestureStatusElement.textContent === 'No gesture detected') {
+                            gestureStatusElement.textContent = 'Head tracking active - Move your head to look around';
+                        }
+                    }, 1000);
 
                 } catch (err) {
                     console.error('Error accessing camera:', err);
@@ -1325,6 +1419,7 @@
                 gestureActive = false;
                 handUpDetected = false;
                 thumbsUpDetected = false;
+                headTrackingActive = false;
             }
         });
 
@@ -1338,6 +1433,21 @@
             const time = clock.getElapsedTime();
 
             if (controls.isLocked) {
+                // Head tracking - apply smooth camera rotation
+                if (headTrackingActive) {
+                    // Smoothly interpolate camera rotation
+                    currentCameraRotationX += (targetCameraRotationX - currentCameraRotationX) * headTrackingSmoothing;
+                    currentCameraRotationY += (targetCameraRotationY - currentCameraRotationY) * headTrackingSmoothing;
+
+                    // Apply rotation to camera (relative to pointer lock control)
+                    const euler = controls.getObject().rotation;
+                    euler.x = currentCameraRotationX;
+                    euler.y += currentCameraRotationY * delta * 2; // Apply yaw as delta rotation
+
+                    // Clamp pitch to prevent over-rotation
+                    euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+                }
+
                 // Movement
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
